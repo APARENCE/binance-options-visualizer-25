@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, TrendingDown, DollarSign, Clock, BarChart3, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -37,8 +37,32 @@ const Index = () => {
   const [balance, setBalance] = useState<number>(1000);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [symbol, setSymbol] = useState<string>('BTCUSDT');
+  const [tradeMessage, setTradeMessage] = useState<{ type: 'win' | 'loss'; message: string } | null>(null);
   const [apiKey] = useState<string>('NejPBydFIlb1xy5YZHErSdN7FqUhKheeaLxBEzu7hOLdVsLBA3Sey0HOFqbRm9yc');
   const [secretKey] = useState<string>('nqBc2HxnDvDj6LI9VvtbH9266xxJfEJyGkspFk5RugzlzT17iuFWADGeQRBneIMH');
+
+  // Opções de moedas disponíveis
+  const currencyOptions = [
+    { value: 'BTCUSDT', label: 'Bitcoin (BTC/USDT)' },
+    { value: 'ETHUSDT', label: 'Ethereum (ETH/USDT)' },
+    { value: 'BNBUSDT', label: 'Binance Coin (BNB/USDT)' },
+    { value: 'ADAUSDT', label: 'Cardano (ADA/USDT)' },
+    { value: 'DOTUSDT', label: 'Polkadot (DOT/USDT)' },
+    { value: 'XRPUSDT', label: 'Ripple (XRP/USDT)' },
+    { value: 'SOLUSDT', label: 'Solana (SOL/USDT)' },
+    { value: 'AVAXUSDT', label: 'Avalanche (AVAX/USDT)' },
+    { value: 'MATICUSDT', label: 'Polygon (MATIC/USDT)' },
+    { value: 'LINKUSDT', label: 'Chainlink (LINK/USDT)' }
+  ];
+
+  // Opções de expiração
+  const expirationOptions = [
+    { value: 5, label: '5 segundos' },
+    { value: 30, label: '30 segundos' },
+    { value: 60, label: '1 minuto' },
+    { value: 300, label: '5 minutos' },
+    { value: 600, label: '10 minutos' }
+  ];
 
   // Estatísticas
   const totalTrades = trades.length;
@@ -55,7 +79,6 @@ const Index = () => {
   const initializeChart = () => {
     if (!chartRef.current) return;
 
-    // Criar gráfico com Lightweight Charts
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js';
     script.onload = () => {
@@ -166,6 +189,19 @@ const Index = () => {
     };
   };
 
+  const showTradeResult = (won: boolean, amount: number) => {
+    const resultMessage = won 
+      ? { type: 'win' as const, message: `🎉 VITÓRIA! +$${(amount * 0.8).toFixed(2)}` }
+      : { type: 'loss' as const, message: `❌ DERROTA! -$${amount.toFixed(2)}` };
+    
+    setTradeMessage(resultMessage);
+    
+    // Remove a mensagem após 3 segundos
+    setTimeout(() => {
+      setTradeMessage(null);
+    }, 3000);
+  };
+
   const placeTrade = (type: 'call' | 'put') => {
     if (tradeAmount > balance) {
       toast.error('Saldo insuficiente');
@@ -215,15 +251,25 @@ const Index = () => {
 
       if (won) {
         setBalance(prev => prev + tradeAmount * 1.8); // 80% payout
-        toast.success(`Trade vencido! +$${(tradeAmount * 0.8).toFixed(2)}`);
+        showTradeResult(true, tradeAmount);
       } else {
-        toast.error(`Trade perdido! -$${tradeAmount}`);
+        showTradeResult(false, tradeAmount);
       }
     }, tradeDuration * 1000);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
+      {/* Trade Result Message Overlay */}
+      {tradeMessage && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 
+                        bg-black/900 backdrop-blur-sm border-2 rounded-lg p-6 text-center animate-pulse">
+          <div className={`text-3xl font-bold ${tradeMessage.type === 'win' ? 'text-green-400' : 'text-red-400'}`}>
+            {tradeMessage.message}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-black/20 backdrop-blur-sm border-b border-white/10 p-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -245,8 +291,36 @@ const Index = () => {
       </div>
 
       <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Painel de Estatísticas */}
+        {/* Painel de Configurações e Trading */}
         <div className="lg:col-span-1 space-y-6">
+          {/* Seletor de Moeda */}
+          <Card className="bg-black/20 backdrop-blur-sm border-white/10">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center">
+                <Settings className="mr-2" size={20} />
+                Configurações
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm text-gray-400 mb-2 block">Moeda</label>
+                <Select value={symbol} onValueChange={setSymbol}>
+                  <SelectTrigger className="bg-black/30 border-white/20 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-white/20">
+                    {currencyOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className="text-white hover:bg-gray-700">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Estatísticas */}
           <Card className="bg-black/20 backdrop-blur-sm border-white/10">
             <CardHeader>
               <CardTitle className="text-white flex items-center">
@@ -295,15 +369,19 @@ const Index = () => {
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-2 block">Duração (segundos)</label>
-                <Input
-                  type="number"
-                  value={tradeDuration}
-                  onChange={(e) => setTradeDuration(Number(e.target.value))}
-                  className="bg-black/30 border-white/20 text-white"
-                  min="30"
-                  max="300"
-                />
+                <label className="text-sm text-gray-400 mb-2 block">Expiração</label>
+                <Select value={tradeDuration.toString()} onValueChange={(value) => setTradeDuration(Number(value))}>
+                  <SelectTrigger className="bg-black/30 border-white/20 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-white/20">
+                    {expirationOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value.toString()} className="text-white hover:bg-gray-700">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Button
@@ -340,8 +418,9 @@ const Index = () => {
           </Card>
         </div>
 
-        {/* Gráfico */}
+        {/* Gráfico e Histórico */}
         <div className="lg:col-span-3 space-y-6">
+          {/* Gráfico */}
           <Card className="bg-black/20 backdrop-blur-sm border-white/10">
             <CardHeader>
               <CardTitle className="text-white">Gráfico {symbol}</CardTitle>
