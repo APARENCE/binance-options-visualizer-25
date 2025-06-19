@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -91,6 +90,9 @@ const Index = () => {
         setIsConnected(false);
       }
       
+      // Clear existing chart data
+      candleSeriesRef.current.setData([]);
+      
       // Fetch new data for the selected symbol
       fetchInitialData();
       connectWebSocket();
@@ -160,6 +162,7 @@ const Index = () => {
 
   const fetchInitialData = async () => {
     try {
+      console.log(`Fetching data for ${symbol}`);
       const response = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1m&limit=100`);
       const data = await response.json();
       
@@ -173,7 +176,9 @@ const Index = () => {
 
       if (candleSeriesRef.current) {
         candleSeriesRef.current.setData(formattedData);
-        setCurrentPrice(formattedData[formattedData.length - 1].close);
+        const lastPrice = formattedData[formattedData.length - 1].close;
+        setCurrentPrice(lastPrice);
+        console.log(`${symbol} price updated:`, lastPrice);
       }
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
@@ -187,10 +192,12 @@ const Index = () => {
       wsRef.current.close();
     }
 
+    console.log(`Connecting to WebSocket for ${symbol}`);
     const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_1m`);
     wsRef.current = ws;
     
     ws.onopen = () => {
+      console.log(`WebSocket connected for ${symbol}`);
       setIsConnected(true);
       toast.success(`Conectado ao stream da ${symbol}`);
     };
@@ -219,6 +226,7 @@ const Index = () => {
     };
 
     ws.onclose = () => {
+      console.log(`WebSocket closed for ${symbol}`);
       setIsConnected(false);
       if (wsRef.current === ws) { // Only reconnect if this is the current connection
         toast.error('Conexão perdida. Tentando reconectar...');
@@ -250,13 +258,25 @@ const Index = () => {
   };
 
   const placeTrade = (type: 'call' | 'put') => {
+    console.log(`Attempting to place ${type} trade. Connected: ${isConnected}, Amount: ${tradeAmount}, Balance: ${balance}`);
+    
     if (tradeAmount > balance) {
       toast.error('Saldo insuficiente');
       return;
     }
 
+    if (tradeAmount <= 0) {
+      toast.error('Valor do trade deve ser maior que zero');
+      return;
+    }
+
     if (!chartInstance.current) {
       toast.error('Gráfico não carregado');
+      return;
+    }
+
+    if (currentPrice <= 0) {
+      toast.error('Aguarde o preço ser carregado');
       return;
     }
 
@@ -287,12 +307,15 @@ const Index = () => {
     setBalance(prev => prev - tradeAmount);
 
     toast.success(`Trade ${type.toUpperCase()} de $${tradeAmount} colocado!`);
+    console.log(`Trade placed:`, newTrade);
 
     // Simular resultado do trade após duração
     setTimeout(() => {
       const finalPrice = currentPrice + (Math.random() - 0.5) * (currentPrice * 0.02); // 2% variation
       const won = (type === 'call' && finalPrice > newTrade.entryPrice) || 
                   (type === 'put' && finalPrice < newTrade.entryPrice);
+      
+      console.log(`Trade ${newTrade.id} finished. Entry: ${newTrade.entryPrice}, Final: ${finalPrice}, Won: ${won}`);
       
       setTrades(prev => prev.map(t => 
         t.id === newTrade.id 
@@ -322,6 +345,9 @@ const Index = () => {
       }
     };
   }, []);
+
+  // Check if buttons should be enabled
+  const canTrade = currentPrice > 0 && tradeAmount > 0 && tradeAmount <= balance;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
@@ -452,7 +478,7 @@ const Index = () => {
                 <Button
                   onClick={() => placeTrade('call')}
                   className="bg-green-600 hover:bg-green-700 text-white"
-                  disabled={!isConnected || tradeAmount > balance}
+                  disabled={!canTrade}
                 >
                   <TrendingUp className="mr-2" size={16} />
                   CALL
@@ -460,12 +486,19 @@ const Index = () => {
                 <Button
                   onClick={() => placeTrade('put')}
                   className="bg-red-600 hover:bg-red-700 text-white"
-                  disabled={!isConnected || tradeAmount > balance}
+                  disabled={!canTrade}
                 >
                   <TrendingDown className="mr-2" size={16} />
                   PUT
                 </Button>
               </div>
+              {!canTrade && (
+                <div className="text-xs text-gray-400 text-center">
+                  {currentPrice <= 0 ? 'Aguardando preço...' : 
+                   tradeAmount <= 0 ? 'Digite um valor válido' :
+                   tradeAmount > balance ? 'Saldo insuficiente' : ''}
+                </div>
+              )}
             </CardContent>
           </Card>
 
