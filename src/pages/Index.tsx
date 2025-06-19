@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TrendingUp, TrendingDown, DollarSign, Clock, BarChart3, Settings } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TrendingUp, TrendingDown, DollarSign, Clock, BarChart3, Settings, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Trade {
@@ -16,7 +18,8 @@ interface Trade {
   duration: number;
   status: 'active' | 'won' | 'lost';
   exitPrice?: number;
-  lineSeries?: any; // Reference to the chart line
+  lineSeries?: any;
+  symbol: string;
 }
 
 interface PriceData {
@@ -41,35 +44,54 @@ const Index = () => {
   const [tradeDuration, setTradeDuration] = useState<number>(60);
   const [balance, setBalance] = useState<number>(1000);
   const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [symbol, setSymbol] = useState<string>('BTCUSDT');
+  const [symbol, setSymbol] = useState<string>('EURUSD');
   const [tradeMessage, setTradeMessage] = useState<{ type: 'win' | 'loss'; message: string } | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('forex');
 
-  // Opções de moedas disponíveis
-  const currencyOptions = [
-    { value: 'BTCUSDT', label: 'Bitcoin (BTC/USDT)' },
-    { value: 'ETHUSDT', label: 'Ethereum (ETH/USDT)' },
-    { value: 'BNBUSDT', label: 'Binance Coin (BNB/USDT)' },
-    { value: 'ADAUSDT', label: 'Cardano (ADA/USDT)' },
-    { value: 'DOTUSDT', label: 'Polkadot (DOT/USDT)' },
-    { value: 'XRPUSDT', label: 'Ripple (XRP/USDT)' },
-    { value: 'SOLUSDT', label: 'Solana (SOL/USDT)' },
-    { value: 'AVAXUSDT', label: 'Avalanche (AVAX/USDT)' },
-    { value: 'MATICUSDT', label: 'Polygon (MATIC/USDT)' },
-    { value: 'LINKUSDT', label: 'Chainlink (LINK/USDT)' },
-    { value: 'LTCUSDT', label: 'Litecoin (LTC/USDT)' },
-    { value: 'UNIUSDT', label: 'Uniswap (UNI/USDT)' },
-    { value: 'ATOMUSDT', label: 'Cosmos (ATOM/USDT)' },
-    { value: 'VETUSDT', label: 'VeChain (VET/USDT)' },
-    { value: 'FTMUSDT', label: 'Fantom (FTM/USDT)' }
-  ];
+  // Categorias e moedas organizadas
+  const assetCategories = {
+    forex: {
+      name: 'Forex',
+      icon: '💱',
+      assets: [
+        { value: 'EURUSD', label: 'EUR/USD', flag: '🇪🇺🇺🇸' },
+        { value: 'GBPUSD', label: 'GBP/USD', flag: '🇬🇧🇺🇸' },
+        { value: 'USDJPY', label: 'USD/JPY', flag: '🇺🇸🇯🇵' },
+        { value: 'USDCHF', label: 'USD/CHF', flag: '🇺🇸🇨🇭' },
+        { value: 'AUDUSD', label: 'AUD/USD', flag: '🇦🇺🇺🇸' },
+        { value: 'USDCAD', label: 'USD/CAD', flag: '🇺🇸🇨🇦' },
+        { value: 'NZDUSD', label: 'NZD/USD', flag: '🇳🇿🇺🇸' },
+        { value: 'EURGBP', label: 'EUR/GBP', flag: '🇪🇺🇬🇧' },
+        { value: 'EURJPY', label: 'EUR/JPY', flag: '🇪🇺🇯🇵' },
+        { value: 'GBPJPY', label: 'GBP/JPY', flag: '🇬🇧🇯🇵' },
+        { value: 'AUDJPY', label: 'AUD/JPY', flag: '🇦🇺🇯🇵' },
+        { value: 'EURAUD', label: 'EUR/AUD', flag: '🇪🇺🇦🇺' }
+      ]
+    },
+    crypto: {
+      name: 'Criptomoedas',
+      icon: '₿',
+      assets: [
+        { value: 'BTCUSDT', label: 'Bitcoin', flag: '₿' },
+        { value: 'ETHUSDT', label: 'Ethereum', flag: 'Ξ' },
+        { value: 'BNBUSDT', label: 'Binance Coin', flag: '🔶' },
+        { value: 'ADAUSDT', label: 'Cardano', flag: '🅰️' },
+        { value: 'DOTUSDT', label: 'Polkadot', flag: '⚫' },
+        { value: 'XRPUSDT', label: 'Ripple', flag: '❌' },
+        { value: 'SOLUSDT', label: 'Solana', flag: '🌟' },
+        { value: 'AVAXUSDT', label: 'Avalanche', flag: '🔺' }
+      ]
+    }
+  };
 
   // Opções de expiração
   const expirationOptions = [
-    { value: 5, label: '5 segundos' },
-    { value: 30, label: '30 segundos' },
-    { value: 60, label: '1 minuto' },
-    { value: 300, label: '5 minutos' },
-    { value: 600, label: '10 minutos' }
+    { value: 15, label: '15s' },
+    { value: 30, label: '30s' },
+    { value: 60, label: '1m' },
+    { value: 300, label: '5m' },
+    { value: 900, label: '15m' },
+    { value: 1800, label: '30m' }
   ];
 
   // Estatísticas
@@ -84,20 +106,22 @@ const Index = () => {
 
   useEffect(() => {
     if (chartInstance.current && candleSeriesRef.current) {
-      // Close existing WebSocket
       if (wsRef.current) {
         wsRef.current.close();
         setIsConnected(false);
       }
       
-      // Clear existing chart data
       candleSeriesRef.current.setData([]);
       
-      // Fetch new data for the selected symbol
-      fetchInitialData();
-      connectWebSocket();
+      // Para Forex, simular dados em vez de usar Binance
+      if (selectedCategory === 'forex') {
+        simulateForexData();
+      } else {
+        fetchInitialData();
+        connectWebSocket();
+      }
     }
-  }, [symbol]);
+  }, [symbol, selectedCategory]);
 
   const initializeChart = () => {
     if (!chartRef.current) return;
@@ -108,7 +132,6 @@ const Index = () => {
       createChart();
     };
     
-    // Check if script is already loaded
     if (window.LightweightCharts) {
       createChart();
     } else {
@@ -121,32 +144,33 @@ const Index = () => {
 
     const chart = window.LightweightCharts.createChart(chartRef.current, {
       layout: {
-        background: { color: '#1a1a1a' },
+        background: { color: '#0a0a0a' },
         textColor: '#ffffff',
       },
       grid: {
-        vertLines: { color: '#2a2a2a' },
-        horzLines: { color: '#2a2a2a' },
+        vertLines: { color: '#1a1a1a' },
+        horzLines: { color: '#1a1a1a' },
       },
       crosshair: {
         mode: window.LightweightCharts.CrosshairMode.Normal,
       },
       rightPriceScale: {
-        borderColor: '#485158',
+        borderColor: '#333333',
+        textColor: '#ffffff',
       },
       timeScale: {
-        borderColor: '#485158',
+        borderColor: '#333333',
         timeVisible: true,
-        secondsVisible: true,
+        secondsVisible: false,
       },
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#00ff88',
+      upColor: '#00d4aa',
       downColor: '#ff4757',
-      borderUpColor: '#00ff88',
+      borderUpColor: '#00d4aa',
       borderDownColor: '#ff4757',
-      wickUpColor: '#00ff88',
+      wickUpColor: '#00d4aa',
       wickDownColor: '#ff4757',
     });
 
@@ -155,9 +179,84 @@ const Index = () => {
 
     chart.timeScale().fitContent();
     
-    // Fetch initial data after chart is created
-    fetchInitialData();
-    connectWebSocket();
+    if (selectedCategory === 'forex') {
+      simulateForexData();
+    } else {
+      fetchInitialData();
+      connectWebSocket();
+    }
+  };
+
+  const simulateForexData = () => {
+    // Preços base para pares de Forex
+    const forexPrices: { [key: string]: number } = {
+      'EURUSD': 1.0850,
+      'GBPUSD': 1.2650,
+      'USDJPY': 150.25,
+      'USDCHF': 0.8850,
+      'AUDUSD': 0.6550,
+      'USDCAD': 1.3650,
+      'NZDUSD': 0.6150,
+      'EURGBP': 0.8580,
+      'EURJPY': 163.20,
+      'GBPJPY': 190.15,
+      'AUDJPY': 98.40,
+      'EURAUD': 1.6580
+    };
+
+    const basePrice = forexPrices[symbol] || 1.0000;
+    const data = [];
+    
+    let currentPrice = basePrice;
+    const now = Math.floor(Date.now() / 1000);
+    
+    // Gerar 100 candles históricos
+    for (let i = 99; i >= 0; i--) {
+      const variation = (Math.random() - 0.5) * 0.001; // Variação de 0.1%
+      const open = currentPrice;
+      const close = open + variation;
+      const high = Math.max(open, close) + Math.random() * 0.0005;
+      const low = Math.min(open, close) - Math.random() * 0.0005;
+      
+      data.push({
+        time: now - (i * 60),
+        open: parseFloat(open.toFixed(5)),
+        high: parseFloat(high.toFixed(5)),
+        low: parseFloat(low.toFixed(5)),
+        close: parseFloat(close.toFixed(5))
+      });
+      
+      currentPrice = close;
+    }
+
+    if (candleSeriesRef.current) {
+      candleSeriesRef.current.setData(data);
+      setCurrentPrice(currentPrice);
+      setIsConnected(true);
+    }
+
+    // Simular atualizações em tempo real
+    const interval = setInterval(() => {
+      const variation = (Math.random() - 0.5) * 0.0008;
+      const newPrice = currentPrice + variation;
+      const newCandle = {
+        time: Math.floor(Date.now() / 1000),
+        open: currentPrice,
+        high: Math.max(currentPrice, newPrice) + Math.random() * 0.0002,
+        low: Math.min(currentPrice, newPrice) - Math.random() * 0.0002,
+        close: parseFloat(newPrice.toFixed(5))
+      };
+
+      if (candleSeriesRef.current) {
+        candleSeriesRef.current.update(newCandle);
+      }
+
+      setPriceChange(newPrice - currentPrice);
+      setCurrentPrice(parseFloat(newPrice.toFixed(5)));
+      currentPrice = newPrice;
+    }, 1000);
+
+    return () => clearInterval(interval);
   };
 
   const fetchInitialData = async () => {
@@ -187,7 +286,6 @@ const Index = () => {
   };
 
   const connectWebSocket = () => {
-    // Close existing connection
     if (wsRef.current) {
       wsRef.current.close();
     }
@@ -228,10 +326,10 @@ const Index = () => {
     ws.onclose = () => {
       console.log(`WebSocket closed for ${symbol}`);
       setIsConnected(false);
-      if (wsRef.current === ws) { // Only reconnect if this is the current connection
+      if (wsRef.current === ws) {
         toast.error('Conexão perdida. Tentando reconectar...');
         setTimeout(() => {
-          if (wsRef.current === ws) { // Double check before reconnecting
+          if (wsRef.current === ws) {
             connectWebSocket();
           }
         }, 3000);
@@ -246,12 +344,11 @@ const Index = () => {
 
   const showTradeResult = (won: boolean, amount: number) => {
     const resultMessage = won 
-      ? { type: 'win' as const, message: `🎉 VITÓRIA! +$${(amount * 0.8).toFixed(2)}` }
-      : { type: 'loss' as const, message: `❌ DERROTA! -$${amount.toFixed(2)}` };
+      ? { type: 'win' as const, message: `🎉 GANHOU! +$${(amount * 0.8).toFixed(2)}` }
+      : { type: 'loss' as const, message: `❌ PERDEU! -$${amount.toFixed(2)}` };
     
     setTradeMessage(resultMessage);
     
-    // Remove a mensagem após 3 segundos
     setTimeout(() => {
       setTradeMessage(null);
     }, 3000);
@@ -280,11 +377,10 @@ const Index = () => {
       return;
     }
 
-    // Adicionar linha no gráfico
     const lineSeries = chartInstance.current.addLineSeries({
-      color: type === 'call' ? '#00ff88' : '#ff4757',
+      color: type === 'call' ? '#00d4aa' : '#ff4757',
       lineWidth: 2,
-      lineStyle: 1, // dashed
+      lineStyle: 1,
     });
     
     lineSeries.setData([{
@@ -300,7 +396,8 @@ const Index = () => {
       timestamp: Date.now(),
       duration: tradeDuration,
       status: 'active',
-      lineSeries: lineSeries // Store reference to the line
+      lineSeries: lineSeries,
+      symbol: symbol
     };
 
     setTrades(prev => [...prev, newTrade]);
@@ -309,9 +406,8 @@ const Index = () => {
     toast.success(`Trade ${type.toUpperCase()} de $${tradeAmount} colocado!`);
     console.log(`Trade placed:`, newTrade);
 
-    // Simular resultado do trade após duração
     setTimeout(() => {
-      const finalPrice = currentPrice + (Math.random() - 0.5) * (currentPrice * 0.02); // 2% variation
+      const finalPrice = currentPrice + (Math.random() - 0.5) * (currentPrice * 0.02);
       const won = (type === 'call' && finalPrice > newTrade.entryPrice) || 
                   (type === 'put' && finalPrice < newTrade.entryPrice);
       
@@ -323,13 +419,12 @@ const Index = () => {
           : t
       ));
 
-      // Remove the line from chart
       if (newTrade.lineSeries && chartInstance.current) {
         chartInstance.current.removeSeries(newTrade.lineSeries);
       }
 
       if (won) {
-        setBalance(prev => prev + tradeAmount * 1.8); // 80% payout
+        setBalance(prev => prev + tradeAmount * 1.8);
         showTradeResult(true, tradeAmount);
       } else {
         showTradeResult(false, tradeAmount);
@@ -337,7 +432,6 @@ const Index = () => {
     }, tradeDuration * 1000);
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (wsRef.current) {
@@ -346,126 +440,120 @@ const Index = () => {
     };
   }, []);
 
-  // Check if buttons should be enabled
   const canTrade = currentPrice > 0 && tradeAmount > 0 && tradeAmount <= balance;
+  const currentAsset = assetCategories[selectedCategory as keyof typeof assetCategories]?.assets.find(a => a.value === symbol);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
+    <div className="min-h-screen bg-black text-white">
       {/* Trade Result Message Overlay */}
       {tradeMessage && (
         <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 
-                        bg-black/90 backdrop-blur-sm border-2 rounded-lg p-6 text-center animate-pulse">
-          <div className={`text-3xl font-bold ${tradeMessage.type === 'win' ? 'text-green-400' : 'text-red-400'}`}>
+                        bg-black/95 backdrop-blur-sm border-2 rounded-xl p-8 text-center animate-pulse
+                        border-green-500 shadow-lg shadow-green-500/20">
+          <div className={`text-4xl font-bold ${tradeMessage.type === 'win' ? 'text-green-400' : 'text-red-400'}`}>
             {tradeMessage.message}
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div className="bg-black/20 backdrop-blur-sm border-b border-white/10 p-4">
+      {/* Header - IQ Option Style */}
+      <div className="bg-gray-900/90 backdrop-blur-sm border-b border-gray-700 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-green-400 bg-clip-text text-transparent">
-              Binary Options Trading
-            </h1>
-            <Badge variant={isConnected ? "default" : "destructive"}>
-              {isConnected ? 'Conectado' : 'Desconectado'}
+          <div className="flex items-center space-x-6">
+            <h1 className="text-xl font-bold text-white">IQ Option Clone</h1>
+            <Badge variant={isConnected ? "default" : "destructive"} className={`${isConnected ? 'bg-green-600' : 'bg-red-600'}`}>
+              {isConnected ? 'CONECTADO' : 'DESCONECTADO'}
             </Badge>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-6">
             <div className="text-right">
-              <p className="text-sm text-gray-400">Saldo</p>
-              <p className="text-xl font-bold text-green-400">${balance.toFixed(2)}</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wide">Saldo</p>
+              <p className="text-2xl font-bold text-green-400">${balance.toFixed(2)}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Painel de Configurações e Trading */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Seletor de Moeda */}
-          <Card className="bg-black/20 backdrop-blur-sm border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center">
-                <Settings className="mr-2" size={20} />
-                Configurações
+      <div className="max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-5 gap-4">
+        {/* Left Panel - Trading Controls */}
+        <div className="lg:col-span-1 space-y-4">
+          {/* Asset Selection */}
+          <Card className="bg-gray-900/50 border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white text-sm font-medium flex items-center">
+                <Activity className="mr-2" size={16} />
+                ATIVO
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm text-gray-400 mb-2 block">Moeda</label>
-                <Select value={symbol} onValueChange={setSymbol}>
-                  <SelectTrigger className="bg-black/30 border-white/20 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-white/20">
-                    {currencyOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className="text-white hover:bg-gray-700">
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <CardContent className="space-y-3">
+              <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 bg-gray-800">
+                  <TabsTrigger value="forex" className="text-xs">FOREX</TabsTrigger>
+                  <TabsTrigger value="crypto" className="text-xs">CRYPTO</TabsTrigger>
+                </TabsList>
+                <TabsContent value={selectedCategory} className="mt-3">
+                  <Select value={symbol} onValueChange={setSymbol}>
+                    <SelectTrigger className="bg-gray-800 border-gray-600 text-white h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-800 border-gray-600">
+                      {assetCategories[selectedCategory as keyof typeof assetCategories]?.assets.map((asset) => (
+                        <SelectItem key={asset.value} value={asset.value} className="text-white hover:bg-gray-700">
+                          <div className="flex items-center space-x-2">
+                            <span>{asset.flag}</span>
+                            <span>{asset.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+
+          {/* Current Price */}
+          <Card className="bg-gray-900/50 border-gray-700">
+            <CardContent className="p-4">
+              <div className="text-center">
+                <div className="flex items-center justify-center space-x-2 mb-2">
+                  <span className="text-lg">{currentAsset?.flag}</span>
+                  <span className="text-sm text-gray-400">{currentAsset?.label}</span>
+                </div>
+                <div className="text-3xl font-mono font-bold text-white">
+                  {selectedCategory === 'forex' ? currentPrice.toFixed(5) : currentPrice.toFixed(2)}
+                </div>
+                <div className={`text-sm font-medium ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {priceChange >= 0 ? '+' : ''}{selectedCategory === 'forex' ? priceChange.toFixed(5) : priceChange.toFixed(2)}
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Estatísticas */}
-          <Card className="bg-black/20 backdrop-blur-sm border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center">
-                <BarChart3 className="mr-2" size={20} />
-                Estatísticas
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Total de Trades:</span>
-                <span className="text-white font-bold">{totalTrades}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Taxa de Vitória:</span>
-                <span className="text-green-400 font-bold">{winRate}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Vencidos:</span>
-                <span className="text-green-400 font-bold">{wonTrades}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Perdidos:</span>
-                <span className="text-red-400 font-bold">{lostTrades}</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Painel de Trading */}
-          <Card className="bg-black/20 backdrop-blur-sm border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center">
-                <DollarSign className="mr-2" size={20} />
-                Novo Trade
-              </CardTitle>
+          {/* Trade Controls */}
+          <Card className="bg-gray-900/50 border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white text-sm font-medium">NEGOCIAÇÃO</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <label className="text-sm text-gray-400 mb-2 block">Valor do Trade</label>
+                <label className="text-xs text-gray-400 mb-2 block uppercase tracking-wide">Valor</label>
                 <Input
                   type="number"
                   value={tradeAmount}
                   onChange={(e) => setTradeAmount(Number(e.target.value))}
-                  className="bg-black/30 border-white/20 text-white"
+                  className="bg-gray-800 border-gray-600 text-white h-10"
                   min="1"
                   max={balance}
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-2 block">Expiração</label>
+                <label className="text-xs text-gray-400 mb-2 block uppercase tracking-wide">Tempo</label>
                 <Select value={tradeDuration.toString()} onValueChange={(value) => setTradeDuration(Number(value))}>
-                  <SelectTrigger className="bg-black/30 border-white/20 text-white">
+                  <SelectTrigger className="bg-gray-800 border-gray-600 text-white h-10">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-white/20">
+                  <SelectContent className="bg-gray-800 border-gray-600">
                     {expirationOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value.toString()} className="text-white hover:bg-gray-700">
                         {option.label}
@@ -474,26 +562,26 @@ const Index = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2 pt-2">
                 <Button
                   onClick={() => placeTrade('call')}
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="bg-green-600 hover:bg-green-700 text-white h-12 text-lg font-bold"
                   disabled={!canTrade}
                 >
-                  <TrendingUp className="mr-2" size={16} />
+                  <TrendingUp className="mr-2" size={20} />
                   CALL
                 </Button>
                 <Button
                   onClick={() => placeTrade('put')}
-                  className="bg-red-600 hover:bg-red-700 text-white"
+                  className="bg-red-600 hover:bg-red-700 text-white h-12 text-lg font-bold"
                   disabled={!canTrade}
                 >
-                  <TrendingDown className="mr-2" size={16} />
+                  <TrendingDown className="mr-2" size={20} />
                   PUT
                 </Button>
               </div>
               {!canTrade && (
-                <div className="text-xs text-gray-400 text-center">
+                <div className="text-xs text-gray-400 text-center bg-gray-800 p-2 rounded">
                   {currentPrice <= 0 ? 'Aguardando preço...' : 
                    tradeAmount <= 0 ? 'Digite um valor válido' :
                    tradeAmount > balance ? 'Saldo insuficiente' : ''}
@@ -502,70 +590,106 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          {/* Preço Atual */}
-          <Card className="bg-black/20 backdrop-blur-sm border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">{symbol}</CardTitle>
+          {/* Statistics */}
+          <Card className="bg-gray-900/50 border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white text-sm font-medium flex items-center">
+                <BarChart3 className="mr-2" size={16} />
+                ESTATÍSTICAS
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-white">${currentPrice.toFixed(2)}</div>
-              <div className={`text-sm ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <div className="text-lg font-bold text-white">{totalTrades}</div>
+                  <div className="text-xs text-gray-400">TRADES</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-green-400">{winRate}%</div>
+                  <div className="text-xs text-gray-400">VITÓRIAS</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <div className="text-sm font-bold text-green-400">{wonTrades}</div>
+                  <div className="text-xs text-gray-400">GANHOS</div>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-red-400">{lostTrades}</div>
+                  <div className="text-xs text-gray-400">PERDAS</div>
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Gráfico e Histórico */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Gráfico */}
-          <Card className="bg-black/20 backdrop-blur-sm border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Gráfico {symbol}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div ref={chartRef} className="w-full h-96 rounded-lg overflow-hidden"></div>
+        {/* Center - Chart */}
+        <div className="lg:col-span-3">
+          <Card className="bg-gray-900/50 border-gray-700 h-full">
+            <CardContent className="p-4 h-full">
+              <div ref={chartRef} className="w-full h-[600px] rounded-lg"></div>
             </CardContent>
           </Card>
+        </div>
 
-          {/* Histórico de Trades */}
-          <Card className="bg-black/20 backdrop-blur-sm border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center">
-                <Clock className="mr-2" size={20} />
-                Histórico de Trades
+        {/* Right Panel - Trade History */}
+        <div className="lg:col-span-1">
+          <Card className="bg-gray-900/50 border-gray-700 h-full">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white text-sm font-medium flex items-center">
+                <Clock className="mr-2" size={16} />
+                HISTÓRICO
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {trades.slice(-10).reverse().map((trade) => (
-                  <div key={trade.id} className="flex items-center justify-between p-3 bg-black/30 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <Badge variant={trade.type === 'call' ? 'default' : 'secondary'}>
+            <CardContent className="p-0">
+              <div className="space-y-2 max-h-[600px] overflow-y-auto px-4 pb-4">
+                {trades.slice(-20).reverse().map((trade) => (
+                  <div key={trade.id} className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge 
+                        variant={trade.type === 'call' ? 'default' : 'secondary'}
+                        className={`text-xs ${trade.type === 'call' ? 'bg-green-600' : 'bg-red-600'}`}
+                      >
                         {trade.type.toUpperCase()}
                       </Badge>
-                      <span className="text-white">${trade.amount}</span>
-                      <span className="text-gray-400">${trade.entryPrice.toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
                       <Badge 
                         variant={
                           trade.status === 'active' ? 'outline' :
                           trade.status === 'won' ? 'default' : 'destructive'
                         }
+                        className={`text-xs ${
+                          trade.status === 'won' ? 'bg-green-600' : 
+                          trade.status === 'lost' ? 'bg-red-600' : 'border-gray-500'
+                        }`}
                       >
-                        {trade.status === 'active' ? 'Ativo' :
-                         trade.status === 'won' ? 'Vencido' : 'Perdido'}
+                        {trade.status === 'active' ? 'ATIVO' :
+                         trade.status === 'won' ? 'GANHOU' : 'PERDEU'}
                       </Badge>
-                      <span className="text-sm text-gray-400">
+                    </div>
+                    <div className="text-xs text-gray-400 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Valor:</span>
+                        <span className="text-white">${trade.amount}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Entrada:</span>
+                        <span className="text-white">
+                          {selectedCategory === 'forex' ? trade.entryPrice.toFixed(5) : trade.entryPrice.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Ativo:</span>
+                        <span className="text-white">{trade.symbol}</span>
+                      </div>
+                      <div className="text-xs text-gray-500">
                         {new Date(trade.timestamp).toLocaleTimeString()}
-                      </span>
+                      </div>
                     </div>
                   </div>
                 ))}
                 {trades.length === 0 && (
-                  <div className="text-center text-gray-400 py-8">
-                    Nenhum trade realizado ainda
+                  <div className="text-center text-gray-400 py-8 text-sm">
+                    Nenhum trade realizado
                   </div>
                 )}
               </div>
