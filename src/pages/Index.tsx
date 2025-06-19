@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ interface Trade {
   duration: number;
   status: 'active' | 'won' | 'lost';
   exitPrice?: number;
+  lineSeries?: any; // Reference to the chart line
 }
 
 interface PriceData {
@@ -29,6 +31,10 @@ interface PriceData {
 
 const Index = () => {
   const chartRef = useRef<HTMLDivElement>(null);
+  const chartInstance = useRef<any>(null);
+  const candleSeriesRef = useRef<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  
   const [currentPrice, setCurrentPrice] = useState<number>(0);
   const [priceChange, setPriceChange] = useState<number>(0);
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -38,8 +44,6 @@ const Index = () => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [symbol, setSymbol] = useState<string>('BTCUSDT');
   const [tradeMessage, setTradeMessage] = useState<{ type: 'win' | 'loss'; message: string } | null>(null);
-  const [apiKey] = useState<string>('NejPBydFIlb1xy5YZHErSdN7FqUhKheeaLxBEzu7hOLdVsLBA3Sey0HOFqbRm9yc');
-  const [secretKey] = useState<string>('nqBc2HxnDvDj6LI9VvtbH9266xxJfEJyGkspFk5RugzlzT17iuFWADGeQRBneIMH');
 
   // Opções de moedas disponíveis
   const currencyOptions = [
@@ -52,7 +56,12 @@ const Index = () => {
     { value: 'SOLUSDT', label: 'Solana (SOL/USDT)' },
     { value: 'AVAXUSDT', label: 'Avalanche (AVAX/USDT)' },
     { value: 'MATICUSDT', label: 'Polygon (MATIC/USDT)' },
-    { value: 'LINKUSDT', label: 'Chainlink (LINK/USDT)' }
+    { value: 'LINKUSDT', label: 'Chainlink (LINK/USDT)' },
+    { value: 'LTCUSDT', label: 'Litecoin (LTC/USDT)' },
+    { value: 'UNIUSDT', label: 'Uniswap (UNI/USDT)' },
+    { value: 'ATOMUSDT', label: 'Cosmos (ATOM/USDT)' },
+    { value: 'VETUSDT', label: 'VeChain (VET/USDT)' },
+    { value: 'FTMUSDT', label: 'Fantom (FTM/USDT)' }
   ];
 
   // Opções de expiração
@@ -72,8 +81,20 @@ const Index = () => {
 
   useEffect(() => {
     initializeChart();
-    connectWebSocket();
-    fetchInitialData();
+  }, []);
+
+  useEffect(() => {
+    if (chartInstance.current && candleSeriesRef.current) {
+      // Close existing WebSocket
+      if (wsRef.current) {
+        wsRef.current.close();
+        setIsConnected(false);
+      }
+      
+      // Fetch new data for the selected symbol
+      fetchInitialData();
+      connectWebSocket();
+    }
   }, [symbol]);
 
   const initializeChart = () => {
@@ -84,7 +105,13 @@ const Index = () => {
     script.onload = () => {
       createChart();
     };
-    document.head.appendChild(script);
+    
+    // Check if script is already loaded
+    if (window.LightweightCharts) {
+      createChart();
+    } else {
+      document.head.appendChild(script);
+    }
   };
 
   const createChart = () => {
@@ -121,11 +148,14 @@ const Index = () => {
       wickDownColor: '#ff4757',
     });
 
-    // Salvar referência do gráfico
-    (window as any).tradingChart = chart;
-    (window as any).candleSeries = candleSeries;
+    chartInstance.current = chart;
+    candleSeriesRef.current = candleSeries;
 
     chart.timeScale().fitContent();
+    
+    // Fetch initial data after chart is created
+    fetchInitialData();
+    connectWebSocket();
   };
 
   const fetchInitialData = async () => {
@@ -141,8 +171,8 @@ const Index = () => {
         close: parseFloat(kline[4]),
       }));
 
-      if ((window as any).candleSeries) {
-        (window as any).candleSeries.setData(formattedData);
+      if (candleSeriesRef.current) {
+        candleSeriesRef.current.setData(formattedData);
         setCurrentPrice(formattedData[formattedData.length - 1].close);
       }
     } catch (error) {
@@ -152,11 +182,17 @@ const Index = () => {
   };
 
   const connectWebSocket = () => {
+    // Close existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
     const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_1m`);
+    wsRef.current = ws;
     
     ws.onopen = () => {
       setIsConnected(true);
-      toast.success('Conectado ao stream da Binance');
+      toast.success(`Conectado ao stream da ${symbol}`);
     };
 
     ws.onmessage = (event) => {
@@ -177,15 +213,26 @@ const Index = () => {
         close: parseFloat(kline.c),
       };
 
-      if ((window as any).candleSeries) {
-        (window as any).candleSeries.update(candle);
+      if (candleSeriesRef.current) {
+        candleSeriesRef.current.update(candle);
       }
     };
 
     ws.onclose = () => {
       setIsConnected(false);
-      toast.error('Conexão perdida. Tentando reconectar...');
-      setTimeout(connectWebSocket, 3000);
+      if (wsRef.current === ws) { // Only reconnect if this is the current connection
+        toast.error('Conexão perdida. Tentando reconectar...');
+        setTimeout(() => {
+          if (wsRef.current === ws) { // Double check before reconnecting
+            connectWebSocket();
+          }
+        }, 3000);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setIsConnected(false);
     };
   };
 
@@ -208,6 +255,23 @@ const Index = () => {
       return;
     }
 
+    if (!chartInstance.current) {
+      toast.error('Gráfico não carregado');
+      return;
+    }
+
+    // Adicionar linha no gráfico
+    const lineSeries = chartInstance.current.addLineSeries({
+      color: type === 'call' ? '#00ff88' : '#ff4757',
+      lineWidth: 2,
+      lineStyle: 1, // dashed
+    });
+    
+    lineSeries.setData([{
+      time: Math.floor(Date.now() / 1000),
+      value: currentPrice
+    }]);
+
     const newTrade: Trade = {
       id: Date.now().toString(),
       type,
@@ -215,31 +279,18 @@ const Index = () => {
       amount: tradeAmount,
       timestamp: Date.now(),
       duration: tradeDuration,
-      status: 'active'
+      status: 'active',
+      lineSeries: lineSeries // Store reference to the line
     };
 
     setTrades(prev => [...prev, newTrade]);
     setBalance(prev => prev - tradeAmount);
 
-    // Adicionar linha no gráfico
-    if ((window as any).tradingChart) {
-      const lineSeries = (window as any).tradingChart.addLineSeries({
-        color: type === 'call' ? '#00ff88' : '#ff4757',
-        lineWidth: 2,
-        lineStyle: 1, // dashed
-      });
-      
-      lineSeries.setData([{
-        time: Math.floor(Date.now() / 1000),
-        value: currentPrice
-      }]);
-    }
-
     toast.success(`Trade ${type.toUpperCase()} de $${tradeAmount} colocado!`);
 
     // Simular resultado do trade após duração
     setTimeout(() => {
-      const finalPrice = currentPrice + (Math.random() - 0.5) * 100; // Simulação
+      const finalPrice = currentPrice + (Math.random() - 0.5) * (currentPrice * 0.02); // 2% variation
       const won = (type === 'call' && finalPrice > newTrade.entryPrice) || 
                   (type === 'put' && finalPrice < newTrade.entryPrice);
       
@@ -248,6 +299,11 @@ const Index = () => {
           ? { ...t, status: won ? 'won' : 'lost', exitPrice: finalPrice }
           : t
       ));
+
+      // Remove the line from chart
+      if (newTrade.lineSeries && chartInstance.current) {
+        chartInstance.current.removeSeries(newTrade.lineSeries);
+      }
 
       if (won) {
         setBalance(prev => prev + tradeAmount * 1.8); // 80% payout
@@ -258,12 +314,21 @@ const Index = () => {
     }, tradeDuration * 1000);
   };
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
       {/* Trade Result Message Overlay */}
       {tradeMessage && (
         <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 
-                        bg-black/900 backdrop-blur-sm border-2 rounded-lg p-6 text-center animate-pulse">
+                        bg-black/90 backdrop-blur-sm border-2 rounded-lg p-6 text-center animate-pulse">
           <div className={`text-3xl font-bold ${tradeMessage.type === 'win' ? 'text-green-400' : 'text-red-400'}`}>
             {tradeMessage.message}
           </div>
