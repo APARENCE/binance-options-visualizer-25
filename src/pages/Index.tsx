@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp, TrendingDown, DollarSign, Clock, BarChart3, Settings, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Clock, BarChart3, Settings, Activity, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Trade {
@@ -20,6 +19,7 @@ interface Trade {
   exitPrice?: number;
   lineSeries?: any;
   symbol: string;
+  payout: number;
 }
 
 interface PriceData {
@@ -42,11 +42,13 @@ const Index = () => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradeAmount, setTradeAmount] = useState<number>(10);
   const [tradeDuration, setTradeDuration] = useState<number>(60);
-  const [balance, setBalance] = useState<number>(1000);
+  const [balance, setBalance] = useState<number>(10000);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [symbol, setSymbol] = useState<string>('EURUSD');
   const [tradeMessage, setTradeMessage] = useState<{ type: 'win' | 'loss'; message: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('forex');
+  const [accountType, setAccountType] = useState<'demo' | 'real'>('demo');
+  const [payout, setPayout] = useState<number>(85);
 
   // Categorias e moedas organizadas
   const assetCategories = {
@@ -113,7 +115,6 @@ const Index = () => {
       
       candleSeriesRef.current.setData([]);
       
-      // Para Forex, simular dados em vez de usar Binance
       if (selectedCategory === 'forex') {
         simulateForexData();
       } else {
@@ -188,7 +189,6 @@ const Index = () => {
   };
 
   const simulateForexData = () => {
-    // Preços base para pares de Forex
     const forexPrices: { [key: string]: number } = {
       'EURUSD': 1.0850,
       'GBPUSD': 1.2650,
@@ -210,9 +210,8 @@ const Index = () => {
     let currentPrice = basePrice;
     const now = Math.floor(Date.now() / 1000);
     
-    // Gerar 100 candles históricos
     for (let i = 99; i >= 0; i--) {
-      const variation = (Math.random() - 0.5) * 0.001; // Variação de 0.1%
+      const variation = (Math.random() - 0.5) * 0.001;
       const open = currentPrice;
       const close = open + variation;
       const high = Math.max(open, close) + Math.random() * 0.0005;
@@ -235,7 +234,6 @@ const Index = () => {
       setIsConnected(true);
     }
 
-    // Simular atualizações em tempo real
     const interval = setInterval(() => {
       const variation = (Math.random() - 0.5) * 0.0008;
       const newPrice = currentPrice + variation;
@@ -342,9 +340,10 @@ const Index = () => {
     };
   };
 
-  const showTradeResult = (won: boolean, amount: number) => {
+  const showTradeResult = (won: boolean, amount: number, payoutPercentage: number) => {
+    const profit = won ? (amount * payoutPercentage / 100) : 0;
     const resultMessage = won 
-      ? { type: 'win' as const, message: `🎉 GANHOU! +$${(amount * 0.8).toFixed(2)}` }
+      ? { type: 'win' as const, message: `🎉 GANHOU! +$${profit.toFixed(2)} (${payoutPercentage}%)` }
       : { type: 'loss' as const, message: `❌ PERDEU! -$${amount.toFixed(2)}` };
     
     setTradeMessage(resultMessage);
@@ -397,13 +396,14 @@ const Index = () => {
       duration: tradeDuration,
       status: 'active',
       lineSeries: lineSeries,
-      symbol: symbol
+      symbol: symbol,
+      payout: payout
     };
 
     setTrades(prev => [...prev, newTrade]);
     setBalance(prev => prev - tradeAmount);
 
-    toast.success(`Trade ${type.toUpperCase()} de $${tradeAmount} colocado!`);
+    toast.success(`Opção ${type.toUpperCase()} de $${tradeAmount} aberta! Payout: ${payout}%`);
     console.log(`Trade placed:`, newTrade);
 
     setTimeout(() => {
@@ -424,12 +424,32 @@ const Index = () => {
       }
 
       if (won) {
-        setBalance(prev => prev + tradeAmount * 1.8);
-        showTradeResult(true, tradeAmount);
+        const profit = tradeAmount * (payout / 100);
+        setBalance(prev => prev + tradeAmount + profit);
+        showTradeResult(true, tradeAmount, payout);
       } else {
-        showTradeResult(false, tradeAmount);
+        showTradeResult(false, tradeAmount, payout);
       }
     }, tradeDuration * 1000);
+  };
+
+  const handleDeposit = () => {
+    if (accountType === 'demo') {
+      toast.error('Para depósitos reais, mude para conta real');
+      return;
+    }
+    toast.success('Redirecionando para depósito...');
+  };
+
+  const switchAccountType = (type: 'demo' | 'real') => {
+    setAccountType(type);
+    if (type === 'demo') {
+      setBalance(10000);
+      toast.success('Mudou para conta demo');
+    } else {
+      setBalance(0);
+      toast.success('Mudou para conta real');
+    }
   };
 
   useEffect(() => {
@@ -460,15 +480,52 @@ const Index = () => {
       <div className="bg-gray-900/90 backdrop-blur-sm border-b border-gray-700 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-6">
-            <h1 className="text-xl font-bold text-white">IQ Option Clone</h1>
+            <h1 className="text-xl font-bold text-white">Opções Binárias</h1>
             <Badge variant={isConnected ? "default" : "destructive"} className={`${isConnected ? 'bg-green-600' : 'bg-red-600'}`}>
               {isConnected ? 'CONECTADO' : 'DESCONECTADO'}
             </Badge>
           </div>
           <div className="flex items-center space-x-6">
+            {/* Account Type Toggle */}
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={() => switchAccountType('demo')}
+                className={`px-4 py-2 text-sm font-medium ${
+                  accountType === 'demo' 
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white' 
+                    : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
+                }`}
+              >
+                DEMO
+              </Button>
+              <Button
+                onClick={() => switchAccountType('real')}
+                className={`px-4 py-2 text-sm font-medium ${
+                  accountType === 'real' 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'bg-gray-600 hover:bg-gray-700 text-gray-300'
+                }`}
+              >
+                REAL
+              </Button>
+            </div>
+            
+            {/* Deposit Button */}
+            <Button
+              onClick={handleDeposit}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 flex items-center space-x-2"
+            >
+              <CreditCard size={16} />
+              <span>DEPÓSITO</span>
+            </Button>
+            
             <div className="text-right">
-              <p className="text-xs text-gray-400 uppercase tracking-wide">Saldo</p>
-              <p className="text-2xl font-bold text-green-400">${balance.toFixed(2)}</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wide">
+                Saldo {accountType === 'demo' ? '(Demo)' : '(Real)'}
+              </p>
+              <p className={`text-2xl font-bold ${accountType === 'demo' ? 'text-orange-400' : 'text-green-400'}`}>
+                ${balance.toFixed(2)}
+              </p>
             </div>
           </div>
         </div>
@@ -533,7 +590,7 @@ const Index = () => {
           {/* Trade Controls */}
           <Card className="bg-gray-900/50 border-gray-700">
             <CardHeader className="pb-3">
-              <CardTitle className="text-white text-sm font-medium">NEGOCIAÇÃO</CardTitle>
+              <CardTitle className="text-white text-sm font-medium">OPÇÃO BINÁRIA</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -548,7 +605,7 @@ const Index = () => {
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-2 block uppercase tracking-wide">Tempo</label>
+                <label className="text-xs text-gray-400 mb-2 block uppercase tracking-wide">Expiração</label>
                 <Select value={tradeDuration.toString()} onValueChange={(value) => setTradeDuration(Number(value))}>
                   <SelectTrigger className="bg-gray-800 border-gray-600 text-white h-10">
                     <SelectValue />
@@ -561,6 +618,12 @@ const Index = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-2 block uppercase tracking-wide">Payout</label>
+                <div className="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white">
+                  {payout}%
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <Button
@@ -638,7 +701,7 @@ const Index = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-white text-sm font-medium flex items-center">
                 <Clock className="mr-2" size={16} />
-                HISTÓRICO
+                OPÇÕES ATIVAS
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -672,6 +735,10 @@ const Index = () => {
                         <span className="text-white">${trade.amount}</span>
                       </div>
                       <div className="flex justify-between">
+                        <span>Payout:</span>
+                        <span className="text-white">{trade.payout}%</span>
+                      </div>
+                      <div className="flex justify-between">
                         <span>Entrada:</span>
                         <span className="text-white">
                           {selectedCategory === 'forex' ? trade.entryPrice.toFixed(5) : trade.entryPrice.toFixed(2)}
@@ -689,7 +756,7 @@ const Index = () => {
                 ))}
                 {trades.length === 0 && (
                   <div className="text-center text-gray-400 py-8 text-sm">
-                    Nenhum trade realizado
+                    Nenhuma opção ativa
                   </div>
                 )}
               </div>
